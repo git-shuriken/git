@@ -1,0 +1,50 @@
+﻿name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: 仓库检查
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 环境信息
+        run: |
+          echo "runner = $RUNNER_OS / $RUNNER_ARCH"
+          echo "commit = $GITHUB_SHA"
+          echo "event  = $GITHUB_EVENT_NAME"
+          git --version
+          node --version
+          python3 --version
+
+      - name: 校验 README
+        run: |
+          test -f README.md || { echo "::error::缺少 README.md"; exit 1; }
+          test -s README.md || { echo "::error::README.md 内容为空"; exit 1; }
+          echo "README.md 大小: $(wc -c < README.md) 字节"
+
+      - name: 校验工作流文件语法
+        run: |
+          python3 - <<'PY'
+          import glob, yaml, sys
+          files = sorted(glob.glob('.github/workflows/*.yml'))
+          assert files, 'no workflow files found'
+          for f in files:
+              with open(f, encoding='utf-8') as fh:
+                  doc = yaml.safe_load(fh)
+              assert isinstance(doc, dict), f'{f}: not a mapping'
+              assert 'jobs' in doc, f'{f}: missing jobs'
+              print(f'{f}: OK, jobs = {list(doc["jobs"])}')
+          PY
+
+      - name: 文件清单
+        run: git ls-files
